@@ -4,6 +4,6 @@
 
 This project was completed in collaboration with:
 
-- Shatoya Gardener
+- Shatoya Gardner
 - Shirina Shaji Daniel
 - Steve Kurian
