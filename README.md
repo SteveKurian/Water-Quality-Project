@@ -4,9 +4,16 @@ The **Water Quality Project** is a full data pipeline that processes and visuali
 
 ---
 
+## Data Sources
+
+- **Dataset**: [Water Quality Dataset](./data/2022-nov16.csv)  
+This dataset contains raw water quality observations collected in November 2022, including fields such as temperature, salinity, dissolved oxygen (ODO), and other sensor readings used for cleaning, analysis, and visualization in this project.
+
+---
+
 ## Authors
 
-This project was completed in collaboration with:
+This project was completed in collaboration with the following for the class CIS3590: Internship Ready Software Development
 
 - Shatoya Gardner
 - Shirina Shaji Daniel
