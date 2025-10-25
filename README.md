@@ -1,20 +1,60 @@
-# Water Quality Data Service
+# Water Quality Data Service (CSV → Cleaning → DB → API → Client)
 
-The **Water Quality Project** is a full data pipeline that processes and visualizes water quality observations. It begins by loading raw CSV files, cleaning the data using the **z-score method** to remove outliers, and storing the cleaned dataset in a **NoSQL database** (MongoDB or mongomock). A **Flask REST API** is built to provide access to the data through endpoints that support filtering, statistics, and outlier detection. The project also includes a **Streamlit client** that communicates with the API to display tables, summary statistics, and interactive **Plotly visualizations**, such as line charts, histograms, and scatter plots. Together, these components demonstrate a complete **ETL (Extract, Transform, Load)** workflow and showcase how to integrate data cleaning, API design, and interactive visualization in a unified system.
+A small end‑to‑end pipeline built like a junior CS project:
+CSV ➜ cleaning (z‑score) ➜ MongoDB/mongomock ➜ Flask REST API ➜ Streamlit client with Plotly charts.
 
----
+## Quick Start
 
-## Data Sources
+```bash
+# 0) (Optional) create & activate a virtualenv for Python 3.10+
+python -m venv .venv && source .venv/bin/activate  # on Windows: .venv\Scripts\activate
 
-- **Dataset**: [Water Quality Dataset](./data/2022-nov16.csv)  
-This dataset contains raw water quality observations collected in November 2022, including fields such as temperature, salinity, dissolved oxygen (ODO), and other sensor readings used for cleaning, analysis, and visualization in this project.
+# 1) Install deps
+pip install -r requirements.txt
 
----
+# 2) Put raw CSVs into data/raw/ 
 
-## Authors
+# 3) Run cleaning + load into DB (Mongo if MONGO_URL is set, else in-memory mongomock)
+python -m api.cleaning
 
-This project was completed in collaboration with the following for the class CIS3590: Internship Ready Software Development
+# 4) Start the API
+python -m api.app
 
-- Shatoya Gardner
-- Shirina Shaji Daniel
-- Steve Kurian
+# 5) In another terminal, start the Streamlit client
+streamlit run client/app.py
+```
+
+### Switching between MongoDB and mongomock
+- **MongoDB**: set `MONGO_URL` (e.g., `mongodb://localhost:27017`)
+- **mongomock** (default): do nothing; the app will use an in-memory DB for quick dev.
+
+## API (Flask)
+
+- `GET /api/health` → `{ "status": "ok" }`
+- `GET /api/observations` with optional query params:
+  - `start`, `end`: ISO timestamps (e.g., `2021-10-21T13:45:00`)
+  - `min_temp`, `max_temp`, `min_sal`, `max_sal`, `min_odo`, `max_odo`
+  - `limit` (default 100, max 1000), `skip`
+- `GET /api/stats` → summary stats for temperature, salinity, odo.
+- `GET /api/outliers?field=temperature&method=iqr&k=1.5`
+
+## Project Layout
+
+```
+water-quality-pipeline/
+├─ data/
+│  ├─ raw/        # put your CSVs here
+│  └─ cleaned/    # cleaned CSVs are written here
+├─ api/
+│  ├─ app.py      # Flask REST API
+│  ├─ cleaning.py # ETL: read CSVs, z-score clean, insert into DB
+│  └─ db.py       # tiny DB helper (Mongo or mongomock)
+└─ client/
+   └─ app.py      # Streamlit UI
+```
+
+## Notes
+
+- The cleaner auto-detects numeric columns and looks for timestamp columns.
+- If your CSVs have separate `Date` and `Time` columns, the cleaner tries to combine them.
+- Z‑score outlier rule: drop any row where **any numeric field** has |z| > 3.

@@ -1,89 +1,137 @@
-import os
+import sys
 from pathlib import Path
 import pandas as pd
 import numpy as np
-from scipy import stats
-from datetime import datetime
-import json
-from db import get_db_client
+from scipy import stats  
+from .db import get_collection
 
-DATA_RAW = Path(__file__).resolve().parents[1] / "data" / "raw"
-DATA_CLEAN = Path(__file__).resolve().parents[1] / "data" / "cleaned"
-DATA_CLEAN.mkdir(parents=True, exist_ok=True)
+ROOT = Path(__file__).resolve().parents[1]
+DATA_RAW = ROOT / "data" / "raw"
+DATA_CLEAN = ROOT / "data" / "cleaned"
 
-NUMERIC_FIELDS = ["temperature", "salinity", "odo"]  # adapt to your CSV column names
+NUMERIC_HINTS = {
+    "temperature": ["temperature", "temp c", "temp", "temperature (c)", "temperature c"],
+    "salinity": ["salinity", "sal", "salinity (ppt)","salinity (ppt) "],
+    "odo": ["odo", "odo mg/l", "odo mg/l ", "odo mg/l%", "odo mg/l% ", "odo mg/l (%)"]
+}
 
-def load_csvs(raw_dir=DATA_RAW):
-    files = sorted(raw_dir.glob("*.csv"))
-    dfs = []
-    for f in files:
-        df = pd.read_csv(f, parse_dates=True, infer_datetime_format=True)
-        # normalize timestamp column name if possible
-        if "timestamp" not in df.columns:
-            for candidate in ["Time", "Date", "Date Time", "date", "time", "Time hh:mm:ss"]:
-                if candidate in df.columns:
-                    df["timestamp"] = pd.to_datetime(df[candidate], errors="coerce")
-                    break
-        if "timestamp" in df.columns:
-            df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-        dfs.append(df)
-    if not dfs:
-        return pd.DataFrame()
-    return pd.concat(dfs, ignore_index=True)
+def _find_timestamp(df: pd.DataFrame) -> pd.Series:
+    for col in df.columns:
+        lc = str(col).strip().lower()
+        if lc in {"timestamp", "time_utc", "datetime", "date_time"}:
+            return pd.to_datetime(df[col], errors="coerce", utc=True)
+    
+    date_cols = [c for c in df.columns if "date" in str(c).lower()]
+    time_cols = [c for c in df.columns if "time" in str(c).lower()]
 
-def clean_zscore(df, numeric_fields=NUMERIC_FIELDS, z_thresh=3.0):
-    df2 = df.copy()
-    # coerce numeric
-    for col in numeric_fields:
-        if col in df2.columns:
-            df2[col] = pd.to_numeric(df2[col], errors="coerce")
-    # compute z-scores column-wise ignoring NaNs
-    z = np.abs(stats.zscore(df2[numeric_fields], nan_policy="omit", axis=0))
-    # if a column was missing from df, stats.zscore will not have it; safe guard:
-    # z is ndarray shaped (n_rows, n_numeric_present)
-    # build boolean mask: keep rows where all present z <= threshold or nan
-    # create mask per column
-    mask = np.ones(len(df2), dtype=bool)
-    numeric_present = [c for c in numeric_fields if c in df2.columns]
-    if numeric_present:
-        z_df = pd.DataFrame(z, columns=numeric_present, index=df2.index)
-        # treat NaN z as False (do not mark as outlier)
-        mask &= ~(z_df > z_thresh).any(axis=1).fillna(False).values
-    removed = (~mask).sum()
-    return df2[mask].reset_index(drop=True), int(removed), int(len(df2))
+    if date_cols and time_cols:
+        date_col = date_cols[0]
+        time_col = time_cols[0]
+        combo = df[date_col].astype(str).str.strip() + " " + df[time_col].astype(str).str.strip()
+        return pd.to_datetime(combo, errors="coerce", utc=True, infer_datetime_format=True)
+    
+    for c in df.columns:
+        if "time" in str(c).lower():
+            return pd.to_datetime(df[c], errors="coerce", utc=True, infer_datetime_format=True)
+    
+    return pd.to_datetime(pd.Series(range(len(df))), unit="s", utc=True)
 
-def insert_to_db(df, db_name="water_quality_data", coll_name="asv_1", index_field="timestamp"):
-    client = get_db_client()
-    db = client[db_name]
-    coll = db[coll_name]
-    # ensure timestamp saved as ISO string or datetime
-    if "timestamp" in df.columns:
-        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-    docs = df.to_dict(orient="records")
-    if docs:
-        coll.insert_many(docs)
-    # optional: create index
-    try:
-        coll.create_index([(index_field, 1)])
-    except Exception:
-        pass
-    return len(docs)
+def _standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
+    
+    df = df.rename(columns=lambda c: str(c).strip().lower())
 
-def main():
-    df = load_csvs()
-    if df.empty:
-        print("No CSVs found in", DATA_RAW)
+    
+    df["timestamp"] = _find_timestamp(df)
+
+    def first_present(candidates: list[str]) -> str | None:
+        for name in candidates:
+            if name in df.columns:
+                return name
+        return None
+
+    src_for = {
+        "temperature": first_present(NUMERIC_HINTS["temperature"]),
+        "salinity":    first_present(NUMERIC_HINTS["salinity"]),
+        "odo":         first_present(NUMERIC_HINTS["odo"]),
+    }
+
+    for canonical, source in src_for.items():
+        if source and canonical not in df.columns:
+            df[canonical] = pd.to_numeric(df[source], errors="coerce")
+
+    obj_cols = [c for c in df.select_dtypes(include=["object"]).columns if c != "timestamp"]
+    if obj_cols:
+        df[obj_cols] = df[obj_cols].apply(lambda s: pd.to_numeric(s, errors="ignore"))
+
+    return df
+
+def _zscore_clean(df: pd.DataFrame, numeric_cols: list[str], z_thresh: float = 3.0) -> pd.DataFrame:
+    
+    z = (df[numeric_cols] - df[numeric_cols].mean()) / df[numeric_cols].std(ddof=0)
+    mask = (z.abs() <= z_thresh) | z.isna()  
+    keep = mask.all(axis=1)
+    return df[keep].copy()
+
+def load_and_clean():
+    DATA_CLEAN.mkdir(parents=True, exist_ok=True)
+    all_paths = sorted(DATA_RAW.glob("*.csv"))
+    if not all_paths:
+        print(f"No CSVs found in {DATA_RAW}")
         return
-    cleaned, removed, original = clean_zscore(df)
-    print(f"Original rows: {original}")
-    print(f"Removed (outliers): {removed}")
-    print(f"Remaining: {len(cleaned)}")
-    # write cleaned CSV
-    out_path = DATA_CLEAN / f"cleaned_{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv"
-    cleaned.to_csv(out_path, index=False)
-    # insert into db
-    inserted = insert_to_db(cleaned)
-    print(f"Inserted {inserted} rows into DB")
+
+    raw_count = 0
+    removed = 0
+    kept = 0
+
+    cleaned_frames = []
+
+    for path in all_paths:
+        df = pd.read_csv(path, low_memory=False)
+        df = _standardize_columns(df)
+
+    
+        numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+        core_cols = [c for c in ["temperature", "salinity", "odo"] if c in df.columns]
+        numeric_cols = list(sorted(set(numeric_cols + core_cols)))
+        before = len(df)
+        raw_count += before
+
+        df = df[df["timestamp"].notna()]
+
+        if numeric_cols:
+            df_clean = _zscore_clean(df, numeric_cols, z_thresh=3.0)
+        else:
+            df_clean = df.copy()
+
+        after = len(df_clean)
+        removed += (before - after)
+        kept += after
+
+        out_path = DATA_CLEAN / f"cleaned_{path.name}"
+        df_clean.to_csv(out_path, index=False)
+        cleaned_frames.append(df_clean)
+
+    if cleaned_frames:
+        all_clean = pd.concat(cleaned_frames, ignore_index=True)
+        all_clean.to_csv(DATA_CLEAN / "cleaned_all.csv", index=False)
+
+        coll = get_collection()
+        coll.drop()
+        
+        coll.create_index("timestamp")
+
+        records = all_clean.to_dict(orient="records")
+        for r in records:
+            if isinstance(r.get("timestamp"), pd.Timestamp):
+                r["timestamp"] = r["timestamp"].isoformat()
+
+        if records:
+            coll.insert_many(records)
+
+    print("=== Cleaning Report ===")
+    print(f"Total rows originally: {raw_count}")
+    print(f"Rows removed as outliers: {removed}")
+    print(f"Rows remaining after cleaning: {kept}")
 
 if __name__ == "__main__":
-    main()
+    load_and_clean()
