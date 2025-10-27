@@ -1,3 +1,5 @@
+# Water Quality Data Service
+
 Water Quality Data Service (CSV → Cleaning → DB → API → Client)
 
 The Water Quality Data Project is a full data pipeline that processes and visualizes water quality observations. It starts by loading raw CSV files, cleaning the data to eliminate outliers, and storing the cleaned dataset in a NoSQL database (MongoDB or mongomock). A Flask REST API is built to provide access to the data through endpoints that support filtering, statistics, and outlier detection. The project also includes a Streamlit client that communicates with the API to display tables, summary statistics, and interactive Plotly visualizations.
@@ -46,4 +48,11 @@ water-quality-pipeline/
    └─ app.py      
 ```
 
+## 👥 Contributors
 
+This project was made in collaboration with the following for the class CIS3590 - Internship Ready Software Development:
+- Shatoya Gardner  
+- Shirina Shaji Daniel
+- Steve Kurian
+
+---
