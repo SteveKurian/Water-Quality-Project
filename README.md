@@ -48,6 +48,12 @@ water-quality-pipeline/
    └─ app.py      
 ```
 
+### Demo Video
+<video src="https://github.com/shirinadan/Water-Quality-Project/blob/main/Demo%20Video.mp4" controls width="600">
+  Your browser does not support the video tag.
+</video>
+
+
 ## 👥 Contributors
 
 This project was made in collaboration with the following for the class CIS3590 - Internship Ready Software Development:
