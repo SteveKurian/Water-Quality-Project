@@ -3,6 +3,9 @@ from datetime import datetime
 import pandas as pd
 from bson import ObjectId
 from .db import get_collection
+from dotenv import load_dotenv
+load_dotenv()
+
 
 def _iso_or_none(ts):
     return ts.isoformat() if ts is not None else None
@@ -57,11 +60,11 @@ def health():
 def observations():
     coll = get_collection()
 
-    # Build time filter (compact drops missing sides)
+    
     t_query = _time_query(_parse_iso("start"), _parse_iso("end"))
     query = {"timestamp": t_query} if t_query else {}
 
-    # Numeric filters: build all, keep only non-empty
+    
     range_specs = {
         "temperature": (_parse_float("min_temp"), _parse_float("max_temp")),
         "salinity":    (_parse_float("min_sal"),  _parse_float("max_sal")),
