@@ -51,7 +51,7 @@ water-quality-pipeline/
 ### Demo Video
 Here is a quick demo showing how our Water Quality Analysis Dashboard works:
 
-[Demo Video](https://github.com/shirinadan/Water-Quality-Project/blob/main/Demo%20Video.mp4)
+[Demo Video](https://drive.google.com/file/d/1dARl9_XCVIQNGW3l2x_Y2Iqq0aU6EU0U/view?usp=sharing)
 
 ---
 
