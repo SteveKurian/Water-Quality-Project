@@ -49,10 +49,11 @@ water-quality-pipeline/
 ```
 
 ### Demo Video
-<video src="https://github.com/shirinadan/Water-Quality-Project/blob/main/Demo%20Video.mp4" controls width="600">
-  Your browser does not support the video tag.
-</video>
+Here is a quick demo showing how our Water Quality Analysis Dashboard works:
 
+[Demo Video](https://github.com/shirinadan/Water-Quality-Project/blob/main/Demo%20Video.mp4)
+
+---
 
 ## 👥 Contributors
 
