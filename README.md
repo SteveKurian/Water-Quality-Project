@@ -17,7 +17,7 @@ The Water Quality Data Project is a full data pipeline that processes and visual
 ---
 
 ## Tech Stack:
-Python • Flask • Pandas • MongoDB • Matplotlib • HTML/CSS • JavaScript
+Python • Flask • Pandas • MongoDB • Matplotlib 
 
 ---
 
@@ -90,8 +90,7 @@ This project can be used by environmental researchers, public health officials, 
 ---
 
 ## Contributors
-
-This project was made in collaboration with the following for the class CIS3590 - Internship Ready Software Development:
+This project was made in collaboration with the following:
 - Shatoya Gardner  
 - Shirina Shaji Daniel
 - Steve Kurian
